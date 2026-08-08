@@ -150,10 +150,16 @@ const contenido = document.getElementById("contenido");
 const estado = document.getElementById("estado");
 const btn = document.getElementById("btn");
 
+const ENTIDADES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+
 function escapar(texto) {
-  const div = document.createElement("div");
-  div.textContent = texto ?? "";
-  return div.innerHTML;
+  return String(texto ?? "").replace(/[&<>"']/g, caracter => ENTIDADES[caracter]);
 }
 
 function crearCard(item) {
@@ -165,7 +171,7 @@ function crearCard(item) {
     ? `<img src="${escapar(item.imagen)}" alt="" loading="lazy" onerror="this.remove()">`
     : "";
 
-  const badge = dcto > 0 ? `<span class="descuento">-${Math.round(dcto)}%</span>` : "";
+  const badge = dcto >= 1 ? `<span class="descuento">-${Math.round(dcto)}%</span>` : "";
   const tachado = lista > precio ? `<div class="lista">${pesos.format(lista)}</div>` : "";
 
   const bloquePrecio = Number.isFinite(precio) && precio > 0

@@ -191,16 +191,28 @@ class ExitoScraper:
 
     @staticmethod
     def _extraer_imagen(tarjeta) -> Optional[str]:
-        """Obtiene la URL real de la imagen evitando placeholders base64.
+        """Obtiene la URL de la foto del producto.
 
-        Con lazy load, src puede traer un GIF transparente embebido, así que
-        se prueban primero data-src y srcset.
+        Una tarjeta en promoción trae dos <img>: primero la cucarda
+        promocional, con alt vacío, y después el producto. Por eso se
+        prefieren las que tienen alt en vez de quedarse con la primera.
         """
-        try:
-            img = tarjeta.find_element(By.CSS_SELECTOR, SEL_IMG)
-        except NoSuchElementException:
-            return None
+        imagenes = tarjeta.find_elements(By.CSS_SELECTOR, SEL_IMG)
+        con_alt = [i for i in imagenes if (i.get_attribute("alt") or "").strip()]
 
+        for img in con_alt or imagenes:
+            url = ExitoScraper._url_de_imagen(img)
+            if url:
+                return url
+        return None
+
+    @staticmethod
+    def _url_de_imagen(img) -> Optional[str]:
+        """Saca la primera URL utilizable de un <img> ignorando placeholders.
+
+        Con lazy load, src puede traer un GIF transparente embebido en
+        base64, así que se prueban primero data-src y srcset.
+        """
         for atributo in ("data-src", "srcset", "src"):
             valor = img.get_attribute(atributo)
             if not valor:
