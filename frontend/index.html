@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Productos scrapeados</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: #f2f3f5;
+    color: #1a1c20;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  header {
+    background: #1a1c20;
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  h1 { font-size: 17px; margin: 0; }
+
+  #estado { font-size: 13px; color: #a0a4aa; margin-right: auto; }
+
+  button {
+    background: #ffd100;
+    color: #1a1c20;
+    border: none;
+    border-radius: 4px;
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button:disabled { opacity: 0.5; cursor: wait; }
+
+  main { padding: 24px; max-width: 1300px; margin: 0 auto; }
+
+  .grilla {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 6px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+
+  .card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    padding: 12px;
+    background: #fff;
+  }
+
+  .nombre {
+    font-size: 13.5px;
+    line-height: 1.4;
+    padding: 0 14px;
+    flex: 1;
+  }
+
+  .lista {
+    font-size: 12px;
+    color: #777;
+    text-decoration: line-through;
+    padding: 8px 14px 0;
+  }
+
+  .precio {
+    font-size: 18px;
+    font-weight: 700;
+    background: #ffd100;
+    padding: 10px 14px;
+    margin-top: 12px;
+  }
+
+  .sin-precio { background: #eee; color: #777; font-size: 13px; font-weight: 400; }
+
+  .descuento {
+    display: inline-block;
+    background: #d8232a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 3px;
+    margin: 12px 14px 0;
+  }
+
+  .aviso {
+    background: #fff;
+    border-left: 4px solid #1a1c20;
+    border-radius: 4px;
+    padding: 20px 24px;
+    max-width: 560px;
+  }
+
+  .aviso.error { border-left-color: #d8232a; }
+  .aviso h2 { font-size: 16px; margin: 0 0 8px; }
+  .aviso p { font-size: 13.5px; line-height: 1.6; color: #666; margin: 0 0 10px; }
+  .aviso p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: ui-monospace, monospace;
+    font-size: 12.5px;
+    background: #f0f1f3;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Productos scrapeados</h1>
+  <span id="estado"></span>
+  <button id="btn">Actualizar</button>
+</header>
+
+<main id="contenido"></main>
+
+<script>
+const API_URL = "http://localhost:8000/api/items";
+
+const pesos = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0
+});
+
+const contenido = document.getElementById("contenido");
+const estado = document.getElementById("estado");
+const btn = document.getElementById("btn");
+
+function escapar(texto) {
+  const div = document.createElement("div");
+  div.textContent = texto ?? "";
+  return div.innerHTML;
+}
+
+function crearCard(item) {
+  const precio = Number(item.precio);
+  const lista = Number(item.precio_lista);
+  const dcto = Number(item.descuento_pct);
+
+  const imagen = item.imagen
+    ? `<img src="${escapar(item.imagen)}" alt="" loading="lazy" onerror="this.remove()">`
+    : "";
+
+  const badge = dcto > 0 ? `<span class="descuento">-${Math.round(dcto)}%</span>` : "";
+  const tachado = lista > precio ? `<div class="lista">${pesos.format(lista)}</div>` : "";
+
+  const bloquePrecio = Number.isFinite(precio) && precio > 0
+    ? `<div class="precio">${pesos.format(precio)}</div>`
+    : `<div class="precio sin-precio">Precio no disponible</div>`;
+
+  return `
+    <a class="card" href="${escapar(item.url)}" target="_blank" rel="noopener">
+      ${imagen}
+      ${badge}
+      <div class="nombre">${escapar(item.nombre)}</div>
+      ${tachado}
+      ${bloquePrecio}
+    </a>`;
+}
+
+async function cargar() {
+  btn.disabled = true;
+  contenido.innerHTML = `<p>Cargando...</p>`;
+
+  try {
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error(`El servidor respondió ${res.status}`);
+
+    const items = await res.json();
+
+    if (items.length === 0) {
+      contenido.innerHTML = `
+        <div class="aviso">
+          <h2>La tabla está vacía</h2>
+          <p>La API responde bien, pero no hay registros todavía.</p>
+          <p>Corre el scraper: <code>python scripts/scraper.py arroz</code></p>
+        </div>`;
+      estado.textContent = "0 registros";
+      return;
+    }
+
+    contenido.innerHTML = `<div class="grilla">${items.map(crearCard).join("")}</div>`;
+    estado.textContent = `${items.length} registros`;
+
+  } catch (error) {
+    const detalle = error instanceof TypeError
+      ? "No hubo respuesta. Revisa que el backend esté corriendo y que CORS esté configurado."
+      : error.message;
+
+    contenido.innerHTML = `
+      <div class="aviso error">
+        <h2>No se pudo leer la API</h2>
+        <p>${escapar(detalle)}</p>
+        <p>Levanta el backend con <code>uvicorn api.main:app --reload</code></p>
+      </div>`;
+    estado.textContent = "Error de conexión";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+btn.addEventListener("click", cargar);
+cargar();
+</script>
+
+</body>
+</html>
