@@ -1,0 +1,25 @@
+# Contexto de build del backend (api y scraper). Solo necesita
+# requirements.txt y backend/; todo lo demas se queda afuera.
+
+# Credenciales: nunca deben entrar a una imagen.
+.env
+.env.*
+
+# Entorno virtual y artefactos de Python locales.
+venv/
+__pycache__/
+*.py[cod]
+
+# Metadatos y documentacion.
+.git/
+.gitignore
+.dockerignore
+README.md
+CLAUDE.md
+.claude/
+
+# El frontend se construye con su propio contexto.
+frontend/
+
+# Archivos de orquestacion: no hacen falta dentro de la imagen.
+docker-compose*.yml

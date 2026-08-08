@@ -1,0 +1,23 @@
+# Ajustes de desarrollo. Compose lo aplica solo en "docker compose up";
+# para produccion se usa: docker compose -f docker-compose.yml up -d
+#
+# Todo lo que hay aqui son bind mounts de solo lectura para editar el
+# codigo sin reconstruir la imagen.
+services:
+  api:
+    volumes:
+      - ./backend/api:/app/api:ro
+    # Tras editar el codigo: docker compose restart api
+    # Para hot-reload real haria falta agregar watchfiles (o uvicorn[standard])
+    # a requirements.txt y descomentar:
+    # command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+
+  # Los selectores de exito.com cambian seguido: montar el script permite
+  # reajustarlos y volver a correr el job sin rebuild.
+  scraper:
+    volumes:
+      - ./backend/scripts:/app/scripts:ro

@@ -1,0 +1,87 @@
+# Orquestacion de las tres piezas del proyecto. Supabase es gestionado
+# (externo), asi que no se containeriza: la api le habla por internet.
+#
+#   api       servicio de larga duracion (FastAPI)
+#   frontend  estatico servido por nginx
+#   scraper   job de un solo uso, no arranca con "docker compose up"
+name: web-scrapper
+
+services:
+  # ---------------------------------------------------------------------
+  # API: la unica pieza con credenciales de Supabase (via env_file).
+  # ---------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: api
+    env_file: .env
+    # Se publica al host porque el navegador (frontend) la llama directo.
+    ports:
+      - "8000:8000"
+    networks:
+      - backend-net
+    # /openapi.json responde sin tocar Supabase, asi el healthcheck mide
+    # que uvicorn ya sirve y que la app importo bien (si faltaran las
+    # credenciales el contenedor se caeria al arrancar).
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/openapi.json", timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------
+  # Frontend: HTML estatico. No necesita la red del backend porque el
+  # fetch lo hace el navegador del host contra localhost:8000.
+  # ---------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5500:8080"
+    networks:
+      - frontend-net
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------
+  # Scraper: job on-demand.
+  #   docker compose run --rm scraper           -> termino "arroz"
+  #   docker compose run --rm scraper cafe      -> termino "cafe"
+  # El profile lo excluye de "docker compose up"; "run" lo activa solo.
+  # No recibe env_file: no necesita las credenciales de Supabase, le
+  # basta con API_URL apuntando al nombre de servicio en la red interna.
+  # ---------------------------------------------------------------------
+  scraper:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: scraper
+    profiles:
+      - jobs
+    environment:
+      API_URL: http://api:8000/api/items
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - backend-net
+    # Chrome se queda sin memoria compartida con los 64 MB por defecto.
+    # El scraper ya pasa --disable-dev-shm-usage, esto es el cinturon extra.
+    shm_size: 1gb
+    restart: "no"
+
+# Redes separadas: el frontend no tiene por que alcanzar a la api ni al
+# scraper por la red de Docker, solo el scraper necesita backend-net.
+networks:
+  backend-net:
+    driver: bridge
+  frontend-net:
+    driver: bridge
